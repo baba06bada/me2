@@ -494,8 +494,8 @@
         <div id="playerBox">
             <video id="player" autoplay webkit-playsinline playsinline controls></video>
             <div id="playerError" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#f44336;font-size:22px;text-align:center;z-index:40;background:rgba(0,0,0,0.85);padding:30px 40px;border-radius:12px;max-width:80%;">
-                ❌ Oynatma hatası<br>
-                <small style="color:#aaa;font-size:14px;">Yayın sunucusuna bağlanılamadı veya desteklenmeyen format</small>
+                ❌ Yayın bağlantı hatası<br>
+                <small style="color:#aaa;font-size:14px;" id="playerErrorDetail">Sunucuya bağlanılamadı veya desteklenmeyen format</small>
                 <div style="margin-top:16px;">
                     <button onclick="exitPlayer()" style="background:#ff9800;color:#000;border:none;padding:10px 24px;border-radius:6px;font-size:16px;font-weight:700;cursor:pointer;">Geri Dön</button>
                 </div>
@@ -1458,7 +1458,8 @@
                     lowLatencyMode: isLive,
                     liveDurationInfinity: isLive,
                     maxLoadingDelay: isLive ? 4 : 10,
-                    maxFragLookUpTolerance: 0.2
+                    maxFragLookUpTolerance: 0.2,
+                    loader: (typeof Hls.DefaultConfig.loader !== 'undefined') ? undefined : undefined
                 });
                 hlsInstance.loadSource(streamUrl);
                 hlsInstance.attachMedia(player);
@@ -1466,8 +1467,9 @@
                 hlsInstance.on(Hls.Events.ERROR, function(evt, data) {
                     if (data.fatal) {
                         if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
-                        if (isLive && reconnectAttempts < PLAYER_RECONNECT_MAX) triggerReconnect();
-                        else if (!isLive) { player.src = streamUrl; try { player.play(); if (currentSpeed !== 1.0) player.playbackRate = currentSpeed; } catch(e) {} }
+                        if (isLive && reconnectAttempts < PLAYER_RECONNECT_MAX) { triggerReconnect(); return; }
+                        /* Reconnect exhausted or VOD — fallback to native */
+                        player.src = streamUrl; try { player.play(); if (currentSpeed !== 1.0) player.playbackRate = currentSpeed; if (!isLive) { checkResume(ch); startResumeTracking(ch); } } catch(e) {}
                     }
                 });
             } else {
@@ -1554,17 +1556,23 @@
             if (!currentPlaying) return;
             reconnectAttempts++;
             if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+            if (reconnectAttempts > PLAYER_RECONNECT_MAX) {
+                var pe = document.getElementById('playerError');
+                if (pe) pe.style.display = 'block';
+                return;
+            }
             showNotif('⚠️ Akış yenileniyor (' + reconnectAttempts + '/' + PLAYER_RECONNECT_MAX + ')...');
             reconnectTimer = setTimeout(function() { if (currentPlaying) playMedia(currentPlaying); }, 500);
         }
 
         player.addEventListener('error', function() {
-            if (currentPlaying && currentMode === 'LIVE') triggerReconnect();
-            else if (currentPlaying) {
-                showNotif('⚠️ Oynatma hatası');
-                var pe = document.getElementById('playerError');
-                if (pe) pe.style.display = 'block';
-            }
+            if (!currentPlaying) return;
+            var pe = document.getElementById('playerError');
+            var pd = document.getElementById('playerErrorDetail');
+            if (currentMode === 'LIVE') { triggerReconnect(); return; }
+            showNotif('⚠️ Yayın bağlantı hatası');
+            if (pe) pe.style.display = 'block';
+            if (pd) pd.textContent = 'Sunucu yanıt vermedi. URL: ' + (currentPlaying ? (activePanel ? activePanel.url : '?') : '?');
         });
         player.addEventListener('stalled', function() {
             if (currentPlaying && currentMode === 'LIVE') {
