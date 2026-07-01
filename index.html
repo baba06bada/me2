@@ -1450,7 +1450,9 @@
             }
             var isLive = (currentMode === 'LIVE');
             var isHls = (streamUrl.indexOf('.m3u8') > 0);
-            if (isHls && typeof Hls !== 'undefined' && Hls.isSupported()) {
+            /* StanbyME: native HLS destekliyorsa HLS.js atla (CORS sorunu) */
+            var nativeHls = isHls && player.canPlayType && player.canPlayType('application/vnd.apple.mpegurl') !== '';
+            if (isHls && !nativeHls && typeof Hls !== 'undefined' && Hls.isSupported()) {
                 hlsInstance = new Hls({
                     maxBufferLength: isLive ? 6 : 30,
                     maxMaxBufferLength: isLive ? 12 : 60,
@@ -1458,8 +1460,7 @@
                     lowLatencyMode: isLive,
                     liveDurationInfinity: isLive,
                     maxLoadingDelay: isLive ? 4 : 10,
-                    maxFragLookUpTolerance: 0.2,
-                    loader: (typeof Hls.DefaultConfig.loader !== 'undefined') ? undefined : undefined
+                    maxFragLookUpTolerance: 0.2
                 });
                 hlsInstance.loadSource(streamUrl);
                 hlsInstance.attachMedia(player);
@@ -1468,12 +1469,12 @@
                     if (data.fatal) {
                         if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
                         if (isLive && reconnectAttempts < PLAYER_RECONNECT_MAX) { triggerReconnect(); return; }
-                        /* Reconnect exhausted or VOD — fallback to native */
                         player.src = streamUrl; try { player.play(); if (currentSpeed !== 1.0) player.playbackRate = currentSpeed; if (!isLive) { checkResume(ch); startResumeTracking(ch); } } catch(e) {}
                     }
                 });
             } else {
-                player.src = streamUrl; try { player.play(); checkResume(ch); startResumeTracking(ch); } catch(e) {}
+                player.src = streamUrl;
+                try { player.play(); checkResume(ch); startResumeTracking(ch); } catch(e) {}
             }
 
             stallCheckInterval = setInterval(function() {
