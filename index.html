@@ -493,6 +493,13 @@
         </div>
         <div id="playerBox">
             <video id="player" autoplay webkit-playsinline playsinline controls></video>
+            <div id="playerError" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#f44336;font-size:22px;text-align:center;z-index:40;background:rgba(0,0,0,0.85);padding:30px 40px;border-radius:12px;max-width:80%;">
+                ❌ Oynatma hatası<br>
+                <small style="color:#aaa;font-size:14px;">Yayın sunucusuna bağlanılamadı veya desteklenmeyen format</small>
+                <div style="margin-top:16px;">
+                    <button onclick="exitPlayer()" style="background:#ff9800;color:#000;border:none;padding:10px 24px;border-radius:6px;font-size:16px;font-weight:700;cursor:pointer;">Geri Dön</button>
+                </div>
+            </div>
             <div id="playerOsd" class="player-osd">
                 <div class="osd-top">
                     <div class="osd-top-left">
@@ -929,8 +936,9 @@
             else if (mode === 'SERIES') endpoint = '&action=get_series_categories';
             var xhr = new XMLHttpRequest();
             xhr.open('GET', apiBase + endpoint, true);
-            xhr.timeout = 10000;
+            xhr.timeout = 15000;
             xhr.onload = function() {
+                var _sn = document.getElementById('channelsList');
                 if (xhr.status >= 200 && xhr.status < 300) {
                     try {
                         var res = JSON.parse(xhr.responseText);
@@ -944,9 +952,17 @@
                         }
                     } catch(e) {}
                 }
+                _sn.innerHTML = '<div style="padding:64px 24px 24px 130px;text-align:center;color:#f44336;font-size:18px;">❌ Kategori yüklenemedi (HTTP ' + xhr.status + ')<br><small style="color:#888;">Sunucu adresini veya panel bilgilerini kontrol edin</small></div>';
                 showNotif('Kategori yüklenemedi');
             };
-            xhr.onerror = function() { showNotif('Sunucu bağlantı hatası'); };
+            xhr.onerror = function() {
+                document.getElementById('channelsList').innerHTML = '<div style="padding:64px 24px 24px 130px;text-align:center;color:#f44336;font-size:18px;">❌ Sunucu bağlantı hatası<br><small style="color:#888;">İnternet bağlantınızı ve sunucu adresini kontrol edin</small></div>';
+                showNotif('Sunucu bağlantı hatası');
+            };
+            xhr.ontimeout = function() {
+                document.getElementById('channelsList').innerHTML = '<div style="padding:64px 24px 24px 130px;text-align:center;color:#f44336;font-size:18px;">❌ Sunucu zaman aşımı<br><small style="color:#888;">Sunucu 15 saniye içinde yanıt vermedi</small></div>';
+                showNotif('Sunucu zaman aşımı');
+            };
             xhr.send();
         }
 
@@ -1030,8 +1046,9 @@
             else if (currentMode === 'SERIES') endpoint = '&action=get_series&category_id=' + selectedCatId;
             var xhr = new XMLHttpRequest();
             xhr.open('GET', apiBase + endpoint, true);
-            xhr.timeout = 15000;
+            xhr.timeout = 20000;
             xhr.onload = function() {
+                var _sn = document.getElementById('channelsList');
                 if (xhr.status >= 200 && xhr.status < 300) {
                     try {
                         var res = JSON.parse(xhr.responseText);
@@ -1043,9 +1060,17 @@
                         return;
                     } catch(e) {}
                 }
+                _sn.innerHTML = '<div style="padding:64px 24px 24px 130px;text-align:center;color:#f44336;font-size:18px;">❌ İçerik yüklenemedi (HTTP ' + xhr.status + ')</div>';
                 showNotif('İçerik yüklenemedi');
             };
-            xhr.onerror = function() { showNotif('Sunucu bağlantı hatası'); };
+            xhr.onerror = function() {
+                document.getElementById('channelsList').innerHTML = '<div style="padding:64px 24px 24px 130px;text-align:center;color:#f44336;font-size:18px;">❌ Sunucu bağlantı hatası<br><small style="color:#888;">İnternet bağlantınızı kontrol edin</small></div>';
+                showNotif('Sunucu bağlantı hatası');
+            };
+            xhr.ontimeout = function() {
+                document.getElementById('channelsList').innerHTML = '<div style="padding:64px 24px 24px 130px;text-align:center;color:#f44336;font-size:18px;">❌ Sunucu zaman aşımı<br><small style="color:#888;">Sunucu 20 saniye içinde yanıt vermedi</small></div>';
+                showNotif('Sunucu zaman aşımı');
+            };
             xhr.send();
         }
 
@@ -1394,6 +1419,8 @@
 
         /* ===== PLAYBACK ENGINE ===== */
         function playMedia(ch) {
+            var pe = document.getElementById('playerError');
+            if (pe) pe.style.display = 'none';
             if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
             player.pause();
             stopResumeTracking();
@@ -1476,6 +1503,8 @@
         }
 
         function playEpisode(ep) {
+            var pe = document.getElementById('playerError');
+            if (pe) pe.style.display = 'none';
             if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
             player.pause();
             stopResumeTracking();
@@ -1531,7 +1560,11 @@
 
         player.addEventListener('error', function() {
             if (currentPlaying && currentMode === 'LIVE') triggerReconnect();
-            else if (currentPlaying) showNotif('⚠️ Oynatma hatası');
+            else if (currentPlaying) {
+                showNotif('⚠️ Oynatma hatası');
+                var pe = document.getElementById('playerError');
+                if (pe) pe.style.display = 'block';
+            }
         });
         player.addEventListener('stalled', function() {
             if (currentPlaying && currentMode === 'LIVE') {
@@ -1634,6 +1667,8 @@
         }
 
         function exitPlayer() {
+            var pe = document.getElementById('playerError');
+            if (pe) pe.style.display = 'none';
             if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
             player.pause();
             player.removeAttribute('src');
